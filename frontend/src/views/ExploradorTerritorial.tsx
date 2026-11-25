@@ -1,5 +1,7 @@
 import {
   AlertCircle,
+  BarChart3,
+  Map as MapIcon,
   MapPin,
   RefreshCw,
   Search,
@@ -19,6 +21,7 @@ import {
   type FilaDepartamento,
 } from '../components/DepartamentosTable'
 import { KpiCard } from '../components/KpiCard'
+import { MapaGuatemala } from '../components/MapaGuatemala'
 import {
   TendenciaHistoricaChart,
   type PuntoTendencia,
@@ -43,6 +46,9 @@ export function ExploradorTerritorial() {
   const [busquedaDepto, setBusquedaDepto] = useState<string>('')
   const [deptoSeleccionado, setDeptoSeleccionado] = useState<string | null>(
     null,
+  )
+  const [vistaTerritorial, setVistaTerritorial] = useState<'mapa' | 'barras'>(
+    'mapa',
   )
 
   const [departamentos, setDepartamentos] = useState<DepartamentoOut[]>([])
@@ -181,6 +187,24 @@ export function ExploradorTerritorial() {
     )
   }, [registrosAnio, busquedaNormalizada])
 
+  // Conjunto de códigos departamentales coincidentes con la búsqueda (para resaltado en mapa)
+  const deptosCoincidentes = useMemo(() => {
+    if (!busquedaNormalizada) return null
+    const set = new Set<string>()
+    for (const item of registrosAnioFiltrados) {
+      set.add(item.depto_cod.trim().padStart(2, '0'))
+    }
+    for (const depto of departamentos) {
+      if (
+        normalizarBusqueda(depto.nombre).includes(busquedaNormalizada) ||
+        depto.depto_cod.includes(busquedaNormalizada)
+      ) {
+        set.add(depto.depto_cod.trim().padStart(2, '0'))
+      }
+    }
+    return set
+  }, [busquedaNormalizada, registrosAnioFiltrados, departamentos])
+
   // Departamento activo para la gráfica de tendencia histórica
   const deptoActivoInfo = useMemo(() => {
     if (!deptoSeleccionado) return null
@@ -280,6 +304,41 @@ export function ExploradorTerritorial() {
   const handleToggleDepto = useCallback((deptoCod: string) => {
     setDeptoSeleccionado((prev) => (prev === deptoCod ? null : deptoCod))
   }, [])
+
+  const selectorVistaTerritorial = (
+    <div
+      role="group"
+      aria-label="Cambiar visualización territorial"
+      className="inline-flex items-center rounded-lg border border-slate-200 bg-[#F4F6F8] p-0.5"
+    >
+      <button
+        type="button"
+        onClick={() => setVistaTerritorial('mapa')}
+        aria-pressed={vistaTerritorial === 'mapa'}
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+          vistaTerritorial === 'mapa'
+            ? 'bg-[#003876] text-white'
+            : 'text-[#475569] hover:text-[#003876]'
+        }`}
+      >
+        <MapIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>Mapa territorial</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setVistaTerritorial('barras')}
+        aria-pressed={vistaTerritorial === 'barras'}
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+          vistaTerritorial === 'barras'
+            ? 'bg-[#003876] text-white'
+            : 'text-[#475569] hover:text-[#003876]'
+        }`}
+      >
+        <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>Top 10 barras</span>
+      </button>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -483,19 +542,36 @@ export function ExploradorTerritorial() {
       {/* Grid de 12 columnas para gráficas principales */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7">
-          <TopDepartamentosChart
-            datos={
-              registrosAnioFiltrados.length > 0
-                ? registrosAnioFiltrados
-                : registrosAnio
-            }
-            meta={meta}
-            anio={anioSeleccionado}
-            deptoSeleccionado={deptoSeleccionado}
-            onSeleccionarDepto={handleToggleDepto}
-            fuenteOficial={fuenteOficial}
-            cargando={cargando}
-          />
+          {vistaTerritorial === 'mapa' ? (
+            <MapaGuatemala
+              datos={registrosAnio}
+              mapaBase2021={mapaBase2021}
+              meta={meta}
+              anio={anioSeleccionado}
+              deptoSeleccionado={deptoSeleccionado}
+              onSeleccionarDepto={handleToggleDepto}
+              onRestablecerNacional={() => setDeptoSeleccionado(null)}
+              deptosCoincidentes={deptosCoincidentes}
+              fuenteOficial={fuenteOficial}
+              cargando={cargando}
+              selectorVista={selectorVistaTerritorial}
+            />
+          ) : (
+            <TopDepartamentosChart
+              datos={
+                registrosAnioFiltrados.length > 0
+                  ? registrosAnioFiltrados
+                  : registrosAnio
+              }
+              meta={meta}
+              anio={anioSeleccionado}
+              deptoSeleccionado={deptoSeleccionado}
+              onSeleccionarDepto={handleToggleDepto}
+              fuenteOficial={fuenteOficial}
+              cargando={cargando}
+              selectorVista={selectorVistaTerritorial}
+            />
+          )}
         </div>
 
         <div className="lg:col-span-5">

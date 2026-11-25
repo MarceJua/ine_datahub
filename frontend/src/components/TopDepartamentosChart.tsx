@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   Bar,
   BarChart,
@@ -23,6 +24,8 @@ interface TopDepartamentosChartProps {
   onSeleccionarDepto: (deptoCod: string) => void
   fuenteOficial: string
   cargando?: boolean
+  /** Elemento opcional en la cabecera (ej. selector Mapa / Top 10). */
+  selectorVista?: ReactNode
 }
 
 interface TopBarDatum {
@@ -39,6 +42,7 @@ export function TopDepartamentosChart({
   onSeleccionarDepto,
   fuenteOficial,
   cargando = false,
+  selectorVista,
 }: TopDepartamentosChartProps) {
   const top10: TopBarDatum[] = [...datos]
     .sort((a, b) => b.valor - a.valor)
@@ -53,16 +57,19 @@ export function TopDepartamentosChart({
     <section className="flex h-full flex-col justify-between rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="font-display text-base font-bold text-[#003876]">
-            Top 10 departamentos · {anio}
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-base font-bold text-[#003876]">
+              Top 10 departamentos · {anio}
+            </h2>
+            <span className="rounded-full bg-[#FFD100] px-2.5 py-0.5 text-xs font-semibold text-[#003876] tabular-nums">
+              {anio}
+            </span>
+          </div>
           <p className="mt-0.5 text-xs text-[#475569]">
             {meta.nombre} ({meta.unidadEtiqueta}). Haz clic en una barra para ver su serie histórica.
           </p>
         </div>
-        <span className="rounded-full bg-[#FFD100] px-2.5 py-0.5 text-xs font-semibold text-[#003876] tabular-nums">
-          {anio}
-        </span>
+        {selectorVista}
       </div>
 
       <div className="h-[340px] w-full">
