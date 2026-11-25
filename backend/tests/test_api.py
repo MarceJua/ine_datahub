@@ -163,6 +163,51 @@ def test_ask_bloquea_prompt_con_ddl_dml_directo_sin_llamar_a_gemini(
         assert response.status_code == 400
 
 
+@pytest.mark.parametrize(
+    "pregunta_destructiva",
+    [
+        "Elimina los registros de 2021",
+        "Borra la tabla de departamentos",
+        "Por favor, actualiza los datos de 2024",
+        "Modifica los valores de Guatemala en 2025",
+        "Inserta un nuevo departamento en dim_departamentos",
+        "Trunca fact_indicadores_depto",
+        "Destruye la base de datos del INE",
+        "Para el año 2021, elimina los registros de tránsito",
+    ],
+)
+def test_ask_bloquea_verbos_destructivos_en_espanol_sin_llamar_al_llm(
+    client: TestClient,
+    pregunta_destructiva: str,
+) -> None:
+    """Bloquea con HTTP 400 preguntas en español con intención destructiva antes de invocar el LLM."""
+
+    class FailIfCalledAdapter(LLMAdapter):
+        def generar_sql(self, pregunta: str, esquema_bd: str = "") -> str:
+            raise AssertionError("No debía invocarse el adaptador LLM externo.")
+
+    app.dependency_overrides[get_llm_adapter] = lambda: FailIfCalledAdapter()
+
+    response = client.post("/api/ask", json={"pregunta": pregunta_destructiva})
+    assert response.status_code == 400
+    assert "solo lectura" in response.json()["detail"].lower()
+
+
+def test_ask_devuelve_422_si_sql_generado_falla_en_postgresql(
+    client: TestClient,
+) -> None:
+    """Diferencia errores de sintaxis/columna del SQL generado con HTTP 422 en lugar de 400."""
+    sql_con_error = "SELECT columna_inexistente FROM dim_departamentos LIMIT 1"
+    app.dependency_overrides[get_llm_adapter] = lambda: FakeLLMAdapter(sql_con_error)
+
+    response = client.post(
+        "/api/ask",
+        json={"pregunta": "¿Cuál es la columna inexistente de los departamentos?"},
+    )
+    assert response.status_code == 422
+    assert "Error al ejecutar la consulta SQL generada" in response.json()["detail"]
+
+
 def test_ask_ejecuta_select_valido_con_ine_readonly(client: TestClient) -> None:
     """Verifica el flujo completo de /api/ask con un SELECT válido usando el adaptador simulado."""
     sql_seguro = (

@@ -20,7 +20,7 @@ const PREGUNTAS_SUGERIDAS: readonly string[] = [
 ]
 
 interface ErrorConsultor {
-  tipo: 'cuota' | 'seguridad' | 'red' | 'general'
+  tipo: 'cuota' | 'seguridad' | 'sql_invalido' | 'red' | 'general'
   titulo: string
   mensaje: string
   detalleTecnico?: string
@@ -51,9 +51,19 @@ function clasificarErrorConsultor(err: unknown): ErrorConsultor {
     if (err.status === 400) {
       return {
         tipo: 'seguridad',
-        titulo: 'Consulta bloqueada o no válida',
+        titulo: 'Consulta bloqueada por seguridad',
         mensaje:
-          'Por política de seguridad de INE-DataHub, el consultor solo ejecuta sentencias de lectura (SELECT) sobre las tablas oficiales.',
+          'Por política de solo lectura de INE-DataHub, el consultor únicamente ejecuta sentencias de consulta (SELECT) sobre las tablas oficiales.',
+        detalleTecnico: err.detail,
+      }
+    }
+
+    if (err.status === 422) {
+      return {
+        tipo: 'sql_invalido',
+        titulo: 'No se pudo ejecutar el SQL generado',
+        mensaje:
+          'El modelo generó una consulta SQL con un error de sintaxis o referencia en PostgreSQL. Intenta reformular tu pregunta con mayor precisión o utiliza una de las consultas sugeridas.',
         detalleTecnico: err.detail,
       }
     }
@@ -293,7 +303,7 @@ export function ConsultorIA() {
         </form>
       </section>
 
-      {/* Manejo elegante de errores (503 cuota, 400 seguridad, red) */}
+      {/* Manejo elegante de errores (503 cuota, 400 seguridad, 422 sintaxis SQL, red) */}
       {error && (
         <section
           role="alert"
@@ -302,12 +312,16 @@ export function ConsultorIA() {
               ? 'border-[#FFD100] bg-[#FFD100]/15'
               : error.tipo === 'seguridad'
                 ? 'border-red-200 bg-red-50/70'
-                : 'border-slate-200 bg-[#F4F6F8]'
+                : error.tipo === 'sql_invalido'
+                  ? 'border-amber-300 bg-amber-50/80'
+                  : 'border-slate-200 bg-[#F4F6F8]'
           }`}
         >
           <div className="flex items-start gap-3">
             {error.tipo === 'seguridad' ? (
               <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
+            ) : error.tipo === 'sql_invalido' ? (
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
             ) : (
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#003876]" />
             )}
@@ -323,7 +337,12 @@ export function ConsultorIA() {
                 )}
                 {error.tipo === 'seguridad' && (
                   <span className="rounded-full border border-red-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                    Política solo lectura
+                    Política de solo lectura
+                  </span>
+                )}
+                {error.tipo === 'sql_invalido' && (
+                  <span className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                    Error de sintaxis SQL · HTTP 422
                   </span>
                 )}
               </div>

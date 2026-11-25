@@ -70,6 +70,43 @@ FORBIDDEN_PROMPT_SQL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Verbos destructivos o de modificación en español (imperativo, infinitivo y subjuntivo)
+_SPANISH_DESTRUCTIVE_VERBS = (
+    r"(?:"
+    r"elimin(?:a|ar|e|es|en|ame)|elimíname|"
+    r"borr(?:a|ar|e|es|en|ame)|bórrame|"
+    r"actualiz(?:a|ar|ame)|actualízame|actualic(?:e|es|en)|"
+    r"modific(?:a|ar|ame)|modifícame|modifiqu(?:e|es|en)|"
+    r"insert(?:a|ar|e|es|en|ame)|insértame|"
+    r"trunc(?:a|ar)|trunqu(?:e|es|en)|"
+    r"destru(?:ye|ir|ya|yas|yan)"
+    r")"
+)
+
+_SPANISH_DATA_TARGETS = (
+    r"(?:registros?|datos?|filas?|tablas?|bases?\s+de\s+datos|bd|"
+    r"valores?|indicadores?|departamentos?|municipios?|fuentes?|"
+    r"cifras?|esquemas?|columnas?|cat[aá]logos?|"
+    r"(?:fact|dim|meta)_\w+)"
+)
+
+# Verbo destructivo al inicio de la pregunta (con o sin cortesía previa)
+FORBIDDEN_PROMPT_ES_START_PATTERN = re.compile(
+    rf"^\s*[¿¡]?\s*"
+    rf"(?:(?:por\s+favor|favor\s+de|hola|oye|puedes|podr[ií]as|"
+    rf"quiero(?:\s+que)?|necesito(?:\s+que)?|ay[uú]dame\s+a)\s*,?\s*)*"
+    rf"\b{_SPANISH_DESTRUCTIVE_VERBS}\b",
+    re.IGNORECASE,
+)
+
+# Intención directa de modificación sobre objetos de datos en cualquier posición
+FORBIDDEN_PROMPT_ES_INTENT_PATTERN = re.compile(
+    rf"\b{_SPANISH_DESTRUCTIVE_VERBS}\b"
+    rf"(?:\s+(?:el|la|los|las|un|una|unos|unas|todos?|todas?|este|esta|estos|estas|de|en|del|al|nuevo|nueva|nuevos|nuevas)){{0,4}}"
+    rf"\s+\b{_SPANISH_DATA_TARGETS}\b",
+    re.IGNORECASE,
+)
+
 SCHEMA_CONTEXT = """
 Esquema relacional oficial de INE-DataHub (PostgreSQL 16):
 
@@ -132,13 +169,24 @@ def limpiar_bloques_markdown_sql(sql_crudo: str) -> str:
 
 
 def validar_pregunta_segura(pregunta: str) -> str:
-    """Bloquea payloads obvios de DDL/DML enviados directamente en la pregunta."""
+    """Bloquea payloads DDL/DML y verbos destructivos en español antes de llamar al LLM."""
     texto = pregunta.strip()
     match = FORBIDDEN_PROMPT_SQL_PATTERN.search(texto)
     if match:
         raise SQLSecurityError(
             f"Solicitud rechazada por política de seguridad: contiene instrucción SQL no permitida ('{match.group(0)}')."
         )
+
+    match_es = (
+        FORBIDDEN_PROMPT_ES_START_PATTERN.search(texto)
+        or FORBIDDEN_PROMPT_ES_INTENT_PATTERN.search(texto)
+    )
+    if match_es:
+        raise SQLSecurityError(
+            "Solicitud rechazada por política de solo lectura: no se permiten operaciones "
+            f"de modificación o eliminación de datos ('{match_es.group(0).strip()}')."
+        )
+
     return texto
 
 
